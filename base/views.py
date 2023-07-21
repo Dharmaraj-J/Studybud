@@ -1,5 +1,10 @@
 from django.shortcuts import render,redirect
+from django.http import HttpResponse
 from .models import Room,Topic
+from django.contrib.auth.models import User
+from django.contrib.auth.decorators import login_required
+from django.contrib.auth import authenticate,login,logout
+from django.contrib import messages
 from django.db.models import Q
 from .forms import RoomForm
 
@@ -11,6 +16,38 @@ from .forms import RoomForm
 #     {'id':2, 'name':'Desingn with me'},
 #     {'id':3, 'name':'Frontend Developers'},
 # ]
+
+
+def loginpage(request):
+
+    if request.user.is_authenticated:
+        return redirect('home')
+
+
+    if request.method == 'POST':
+        username = request.POST.get('username')
+        password = request.POST.get('password')
+
+        try:
+            user = User.objects.get(username=username)
+        except:
+            messages.error(request, "User Does Not Exist.")
+
+        user = authenticate(request, username=username, password=password)
+
+        if user is not None:
+            login(request, user)
+            return redirect('home')
+        else:
+            messages.error(request, 'Usernamr or Password does not exist')
+
+
+    context = {}
+    return render(request, 'base/login_register.html', context)
+
+def logoutuser(request):
+    logout(request)
+    return redirect('home')
 
 def home(request):
     q = request.GET.get('q') if request.GET.get('q') != None else ''
@@ -32,6 +69,8 @@ def room(request,pk):
     context = {'room':room}        
     return render(request,'base/room.html', context)
 
+
+@login_required(login_url='login')
 def createroom(request):
     form = RoomForm()
     if request.method == 'POST':
@@ -43,9 +82,13 @@ def createroom(request):
     context = {'form':form}
     return render(request, 'base/room_form.html',context)
 
+@login_required(login_url='login')
 def updateroom(request,pk):
     room = Room.objects.get(id=pk)
     form = RoomForm(instance=room)
+
+    if request.user != room.host:
+        return HttpResponse('You are not allowed')
 
     if request.method == 'POST':
         form = RoomForm(request.POST,instance=room)
